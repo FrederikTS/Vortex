@@ -1,18 +1,19 @@
 import time
 import datetime
-import json  # til korrekt JSON-encoding til Discord
+import json  # for correct JSON encoding for Discord
 import requests
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import subprocess  # Used for running Git commands
 
 # -----------------------
-# KONFIGURATION
+# CONFIGURATION
 # -----------------------
-TWELVE_DATA_API_KEY = "6438f9035dbf40598b7e588cc74e1e8f"  # Få en gratis nøgle fra https://twelvedata.com
+TWELVE_DATA_API_KEY = "6438f9035dbf40598b7e588cc74e1e8f"  # Get a free key from https://twelvedata.com
 
-# Discord webhooks for forskellige confidence niveauer
+# Discord webhooks for different confidence levels
 DISCORD_WEBHOOK_URL_DEFAULT = "https://discord.com/api/webhooks/1349470597218041926/n3U9-vNHXo2IRUxMKpuvV_h4uFz6XeEGzaTASy6-dD5xG9tPZ-W6HlDz5fY_J1AvHA5K"
 DISCORD_WEBHOOK_URL_0_20 = "https://discord.com/api/webhooks/1349494950689247374/1VUmOI93KRYPZ5QujQ-_eEHGb9_IP2JxSUZ_TwxJfJqRNOsIFq9aG6WP-7eTc0zAEIjT"
 DISCORD_WEBHOOK_URL_21_40 = "https://discord.com/api/webhooks/1349494939448250491/qKgiAidpnbY3sV9ASu2l983NfF3u2W5A5QFVA1y81Gqbv5hRgtY7eJo_oqEz0cVC5A2R"
@@ -20,26 +21,42 @@ DISCORD_WEBHOOK_URL_41_60 = "https://discord.com/api/webhooks/134949496202212158
 DISCORD_WEBHOOK_URL_61_80 = "https://discord.com/api/webhooks/1349495238678282250/H4ALQvbptpmmUaeAPY23SQFMcIgDLqpvqJtVScjf7mkArWNwEnpY0dvBykWJSLRkfAXX"
 DISCORD_WEBHOOK_URL_81_100 = "https://discord.com/api/webhooks/1349495289895190560/ooV-YFivT9YcLEK2B6c6uWraKfhLbqmk_QkBSko4Uyt8G75eoDLKEclVwUmorP6ugJgt"
 
-# Liste af forex-par (brug fx "EURUSD")
+# List of forex pairs (use fx "EURUSD")
 FOREX_PAIRS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD"]
 
-# Risikobeløb og gearing
+# Risk amount and leverage
 RISK_AMOUNT = 100
 LEVERAGE = 30
 
-# Timeout for et tradeforslag (5 timer)
-TRADE_TIMEOUT = 5 * 60 * 60  # 
+# Timeout for a trade suggestion (5 hours)
+TRADE_TIMEOUT = 5 * 60 * 60
 
-# Filer til logning af trade-historik og win rate
+# Files for logging trade history and win rate
 TRADE_LOG_FILE = "trade_history.csv"
 WIN_RATE_FILE = "win_rate.txt"
 
-# Twelve Data gratis API rate limit (ca. 8 kald/minut)
-API_CALL_DELAY = 15  # sekunder mellem API-kald
+# Twelve Data free API rate limit (about 8 calls/minute)
+API_CALL_DELAY = 15  # seconds between API calls
 
 # -----------------------
-# Hjælpefunktioner
+# HELPER FUNCTIONS
 # -----------------------
+
+def commit_and_push_file(file_path, commit_message):
+    """
+    Adds, commits, and pushes a file to the GitHub repo.
+    Ensure that your Git remote is configured with authentication.
+    """
+    try:
+        # Stage the file
+        subprocess.run(["git", "add", file_path], check=True)
+        # Commit with the provided message
+        subprocess.run(["git", "commit", "-m", commit_message], check=True)
+        # Push to the remote repository (adjust branch name if necessary)
+        subprocess.run(["git", "push", "origin", "main"], check=True)
+        print(f"Committed and pushed {file_path}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error committing or pushing {file_path}: {e}")
 
 def get_historical_data(pair, interval="15min", outputsize="100"):
     symbol = pair[:3] + "/" + pair[3:]
@@ -52,7 +69,7 @@ def get_historical_data(pair, interval="15min", outputsize="100"):
     response = requests.get("https://api.twelvedata.com/time_series", params=params)
     data = response.json()
     if "values" not in data:
-        raise ValueError(f"Fejl i API-respons for {pair}: {data.get('message', data)}")
+        raise ValueError(f"API error for {pair}: {data.get('message', data)}")
     values = data["values"]
     df = pd.DataFrame(values)
     df["datetime"] = pd.to_datetime(df["datetime"])
@@ -91,23 +108,16 @@ def calculate_indicators(df):
     return df
 
 def evaluate_trade_signal(trade, df):
-    """
-    Evaluerer trade signal baseret på indikatorer og giver et score for hver (1-10).
-    Returnerer en samlet "sikkerhedsprocent" (max 95%) og en dict med de enkelte scorer.
-    """
     latest = df.iloc[-1]
     price = latest['close']
     sma = latest['SMA20']
-    # SMA Score: Hvor meget prisen afviger fra SMA20 (for BUY skal prisen være over, for SELL under)
     if trade['signal'] == "BUY":
         diff = price - sma
     else:
         diff = sma - price
-    # Hvis afvigelsen er ca. 2% af SMA, så opnås top-score
     sma_score = 5 + 5 * (diff / (sma * 0.02))
     sma_score = max(1, min(sma_score, 10))
     
-    # RSI Score: For BUY er lavere RSI bedre (men ikke ekstremt), for SELL omvendt
     rsi = latest['RSI']
     if trade['signal'] == "BUY":
         if rsi < 50:
@@ -125,21 +135,13 @@ def evaluate_trade_signal(trade, df):
             rsi_score = 10 - (50 - rsi) * (9/20)
     rsi_score = max(1, min(rsi_score, 10))
     
-    # MACD Score: For BUY skal MACD-histogrammet være positivt, for SELL negativt.
     macd_hist = latest.get('MACD_hist', 0)
     if trade['signal'] == "BUY":
-        if macd_hist <= 0:
-            macd_score = 1
-        else:
-            macd_score = 1 + 9 * (macd_hist / 0.5)
+        macd_score = 1 if macd_hist <= 0 else 1 + 9 * (macd_hist / 0.5)
     else:
-        if macd_hist >= 0:
-            macd_score = 1
-        else:
-            macd_score = 1 + 9 * ((-macd_hist) / 0.5)
+        macd_score = 1 if macd_hist >= 0 else 1 + 9 * ((-macd_hist) / 0.5)
     macd_score = max(1, min(macd_score, 10))
     
-    # Risk/Reward Score: Jo højere ratio, jo bedre
     risk_reward = trade['risk_reward']
     if risk_reward < 1:
         rr_score = 1
@@ -155,8 +157,8 @@ def evaluate_trade_signal(trade, df):
     }
     
     total_score = (sma_score + rsi_score + macd_score + rr_score) / 4
-    confidence_percent = total_score * 10  # Skaleret til procent (max 100)
-    confidence_percent = min(confidence_percent, 95)  # Vi når aldrig 100%
+    confidence_percent = total_score * 10
+    confidence_percent = min(confidence_percent, 95)
     
     return confidence_percent, indicator_details
 
@@ -164,16 +166,14 @@ def decide_trade(df):
     latest = df.iloc[-1]
     trade_signal = None
     reason = ""
-    # Grundlæggende betingelser – disse kan udvides med flere indikatorer senere
     if latest['close'] > latest['SMA20'] and latest['RSI'] < 70:
         trade_signal = "BUY"
-        reason = "Pris over SMA20 med moderat RSI indikerer opadgående momentum."
+        reason = "Price above SMA20 with moderate RSI indicates upward momentum."
     elif latest['close'] < latest['SMA20'] and latest['RSI'] > 30:
         trade_signal = "SELL"
-        reason = "Pris under SMA20 med moderat RSI indikerer nedadgående momentum."
+        reason = "Price below SMA20 with moderate RSI indicates downward momentum."
     
     if trade_signal:
-        # MACD-bekræftelse
         macd_hist = latest.get('MACD_hist', 0)
         if trade_signal == "BUY" and macd_hist <= 0:
             return None
@@ -191,7 +191,6 @@ def decide_trade(df):
         risk = abs(entry - stoploss)
         reward = abs(take_profit - entry)
         risk_reward = reward / risk if risk != 0 else np.nan
-        # Juster take profit for at sikre mindst 1:1
         if risk != 0 and risk_reward < 1:
             if trade_signal == "BUY":
                 take_profit = entry + risk
@@ -201,7 +200,7 @@ def decide_trade(df):
             risk_reward = reward / risk
 
         trade = {
-            "instrument": None,  # skal sættes af kaldende funktion
+            "instrument": None,  # To be set by the caller
             "signal": trade_signal,
             "entry": entry,
             "stoploss": stoploss,
@@ -220,23 +219,20 @@ def decide_trade(df):
 
 def generate_trade_graph(df, trade, filename="trade_graph.png"):
     plt.figure(figsize=(12, 6))
-    plt.plot(df['time'], df['close'], label='Lukkepris')
+    plt.plot(df['time'], df['close'], label='Close Price')
     plt.plot(df['time'], df['SMA20'], label='SMA20')
-    # Marker entry, stop loss og take profit med vandrette linjer
     plt.axhline(y=trade['entry'], color='blue', linestyle=':', label='Entry')
     plt.axhline(y=trade['stoploss'], color='red', linestyle='--', label='Stop Loss')
     plt.axhline(y=trade['take_profit'], color='green', linestyle='--', label='Take Profit')
-    # Marker det seneste datapunkt
     latest_time = df.iloc[-1]['time']
     latest_price = df.iloc[-1]['close']
     plt.scatter(latest_time, latest_price, color='black')
     
     plt.title(f"{trade['instrument']} 15-min Chart - {trade['signal']} Signal")
-    plt.xlabel("Tid")
-    plt.ylabel("Pris")
+    plt.xlabel("Time")
+    plt.ylabel("Price")
     plt.legend()
     
-    # Tilføj en annotationsboks med de tekniske indikator-scorer
     if 'indicator_details' in trade:
         details = trade['indicator_details']
         textstr = '\n'.join([f"{k}: {v}" for k, v in details.items()])
@@ -250,7 +246,6 @@ def generate_trade_graph(df, trade, filename="trade_graph.png"):
     return filename
 
 def send_discord_notification(message, file_path=None, confidence=None, trade_signal=None):
-    # Vælg webhook URL baseret på confidence
     webhook_url = DISCORD_WEBHOOK_URL_DEFAULT
     if confidence is not None:
         if confidence <= 20:
@@ -264,17 +259,16 @@ def send_discord_notification(message, file_path=None, confidence=None, trade_si
         elif 81 <= confidence <= 100:
             webhook_url = DISCORD_WEBHOOK_URL_81_100
 
-    # Vælg embed farve baseret på trade signal
     if trade_signal == "BUY":
-        embed_color = 3066993  # grøn
+        embed_color = 3066993  # green
     elif trade_signal == "SELL":
-        embed_color = 15158332  # rød
+        embed_color = 15158332  # red
     else:
-        embed_color = 3447003  # blå
+        embed_color = 3447003  # blue
 
     data = {
         "embeds": [{
-            "title": "Trade Notifikation",
+            "title": "Trade Notification",
             "description": message,
             "color": embed_color,
             "timestamp": datetime.datetime.utcnow().isoformat()
@@ -295,7 +289,7 @@ def load_trade_history():
         try:
             return pd.read_csv(TRADE_LOG_FILE, parse_dates=["timestamp"])
         except Exception as e:
-            print(f"Fejl ved indlæsning af trade historik: {e}")
+            print(f"Error loading trade history: {e}")
             return pd.DataFrame(columns=["timestamp", "instrument", "signal", "entry", "stoploss", "take_profit",
                                          "risk_reward", "confidence", "notional", "status"])
     else:
@@ -304,10 +298,12 @@ def load_trade_history():
 
 def save_trade_history(df):
     df.to_csv(TRADE_LOG_FILE, index=False)
+    commit_and_push_file(TRADE_LOG_FILE, "Update trade history")
 
 def save_win_rate_to_file(win_rate):
     with open(WIN_RATE_FILE, "w") as f:
         f.write(f"{win_rate:.1f}")
+    commit_and_push_file(WIN_RATE_FILE, "Update win rate")
 
 def load_win_rate_from_file():
     if os.path.exists(WIN_RATE_FILE):
@@ -315,7 +311,7 @@ def load_win_rate_from_file():
             with open(WIN_RATE_FILE, "r") as f:
                 return float(f.read().strip())
         except Exception as e:
-            print(f"Fejl ved indlæsning af win rate: {e}")
+            print(f"Error loading win rate: {e}")
             return None
     return None
 
@@ -345,13 +341,13 @@ def calculate_win_rate(trade_history):
     return win_rate
 
 # -----------------------
-# HOVEDLOOP
+# MAIN LOOP
 # -----------------------
 
 def main_loop():
     trade_history = load_trade_history()
     
-    # Ved opstart: opdater åbne trades
+    # At startup: update open trades
     for pair in FOREX_PAIRS:
         open_trades = trade_history[(trade_history["instrument"] == pair) & (trade_history["status"] == "open")]
         if not open_trades.empty:
@@ -362,25 +358,25 @@ def main_loop():
                     new_status = update_trade_status(trade, current_price)
                     if new_status != "open":
                         trade_history.loc[idx, "status"] = new_status
-                        print(f"Opdateret trade for {pair} ved opstart til {new_status}.")
+                        print(f"Updated trade for {pair} at startup to {new_status}.")
             except Exception as e:
-                print(f"Fejl ved opdatering af åbne trades for {pair}: {e}")
+                print(f"Error updating open trades for {pair}: {e}")
             time.sleep(API_CALL_DELAY)
     save_trade_history(trade_history)
     
     win_rate = calculate_win_rate(trade_history)
     save_win_rate_to_file(win_rate)
-    print(f"Indlæst Win Rate: {win_rate:.1f}%")
+    print(f"Loaded Win Rate: {win_rate:.1f}%")
     
     while True:
         try:
             for pair in FOREX_PAIRS:
-                print(f"Behandler {pair}...")
+                print(f"Processing {pair}...")
                 try:
                     df = get_historical_data(pair)
                     df = calculate_indicators(df)
                 except Exception as e:
-                    print(f"Datafejl for {pair}: {e}")
+                    print(f"Data error for {pair}: {e}")
                     time.sleep(API_CALL_DELAY)
                     continue
 
@@ -393,15 +389,15 @@ def main_loop():
                         generate_trade_graph(df, trade, filename=graph_file)
                         win_rate = calculate_win_rate(trade_history)
                         message = (
-                            f"**Trade Forslag for {pair}**\n"
+                            f"**Trade Suggestion for {pair}**\n"
                             f"Signal: {trade['signal']}\n"
                             f"Entry: {trade['entry']:.5f}\n"
                             f"Stop Loss: {trade['stoploss']:.5f}\n"
                             f"Take Profit: {trade['take_profit']:.5f}\n"
                             f"Risk/Reward Ratio: {trade['risk_reward']:.2f}\n"
                             f"Confidence: {trade['confidence']:.0f}%\n"
-                            f"Notional (ved 1:{LEVERAGE}): {trade['notional']}\n"
-                            f"Grund: {trade['reason']}\n"
+                            f"Notional (at 1:{LEVERAGE}): {trade['notional']}\n"
+                            f"Reason: {trade['reason']}\n"
                             f"Win Rate: {win_rate:.1f}%\n"
                             f"Timestamp: {trade['timestamp']}\n"
                             "--------------------------"
@@ -409,9 +405,9 @@ def main_loop():
                         send_discord_notification(message, file_path=graph_file, confidence=trade['confidence'], trade_signal=trade['signal'])
                         trade_history = pd.concat([trade_history, pd.DataFrame([trade])], ignore_index=True)
                         save_trade_history(trade_history)
-                        print(f"Sendt tradeforslag for {pair}")
+                        print(f"Sent trade suggestion for {pair}")
                 else:
-                    print(f"Der er allerede en åben trade for {pair}")
+                    print(f"There is already an open trade for {pair}")
 
                 current_price = df.iloc[-1]['close']
                 if not open_trades.empty:
@@ -421,19 +417,19 @@ def main_loop():
                             trade_history.loc[idx, "status"] = new_status
                             save_trade_history(trade_history)
                             result_message = (
-                                f"**Opdatering for {pair}:** Trade {trade['signal']} fra {trade['timestamp']} er nu {new_status.upper()}.\n"
+                                f"**Update for {pair}:** Trade {trade['signal']} from {trade['timestamp']} is now {new_status.upper()}.\n"
                                 f"Entry: {trade['entry']:.5f} | TP: {trade['take_profit']:.5f} | SL: {trade['stoploss']:.5f}\n"
-                                f"Aktuel pris: {current_price:.5f}"
+                                f"Current Price: {current_price:.5f}"
                             )
                             send_discord_notification(result_message, confidence=trade['confidence'], trade_signal=trade['signal'])
-                            print(f"Opdateret trade for {pair} som {new_status}.")
+                            print(f"Updated trade for {pair} to {new_status}.")
                 time.sleep(API_CALL_DELAY)
                 
                 win_rate = calculate_win_rate(trade_history)
                 save_win_rate_to_file(win_rate)
-                print(f"Aktuel Win Rate: {win_rate:.1f}%")
+                print(f"Current Win Rate: {win_rate:.1f}%")
         except Exception as e:
-            print(f"Fejl i hovedloekken: {e}")
+            print(f"Error in main loop: {e}")
         time.sleep(10 * 60)
 
 if __name__ == "__main__":
