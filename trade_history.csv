@@ -1,0 +1,1 @@
+timestamp,instrument,signal,entry,stoploss,take_profit,risk_reward,confidence,notional,status,time_of_day,day_of_week,market_volatility,market_trend_strength,atr_pct,adx,is_trending,rsi,macd_hist,bb_width,ml_adjustment,mtf_strength

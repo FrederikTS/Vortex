@@ -1,0 +1,30 @@
+===== TRADING SYSTEM OPTIMIZATION RESULTS =====
+
+Strategy Recommendations:
+- Recommended RSI Buy Threshold: 30
+- Recommended RSI Sell Threshold: 70
+- Recommended Min Strength Threshold: 30
+- Recommended ATR Multiplier (Trending): 2.5
+- Recommended ATR Multiplier (Ranging): 1.5
+- Recommended Min Reward Ratio: 1.5
+- Trending Up markets: 8.0% win rate (7135/89080 trades)
+- Trending Down markets: 10.5% win rate (8322/79388 trades)
+- Ranging markets: 39.5% win rate (16631/42106 trades)
+- High Volatility markets: 60.2% win rate (171/284 trades)
+- Low Volatility markets: 35.5% win rate (24145/67970 trades)
+- Overbought markets: 30.3% win rate (243/801 trades)
+- Oversold markets: 34.7% win rate (263/758 trades)
+- Best performing pair: XRPUSD (41.6% win rate)
+- Worst performing pair: XRPUSD (41.6% win rate)
+
+ML Model Recommendations:
+- Best balancing method: None
+- F1 score: 0.0000
+
+Performance Expectations:
+- USDJPY expected win rate: 71.43%
+- ETHUSD expected win rate: 81.82%
+- XRPUSD expected win rate: 36.36%
+
+Average expected win rate: 63.20%
+Recommended risk per trade (half-Kelly): 0.19% of account
