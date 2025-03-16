@@ -1,5 +1,0 @@
-timestamp,instrument,signal,entry,stoploss,take_profit,risk_reward,confidence,notional,status,reason,indicator_details
-2025-03-13 09:15:00,GBPUSD,SELL,1.2965,1.2981,1.2949,1.0,37.919445246723456,3000,win,Pris under SMA20 med moderat RSI indikerer nedadgående momentum.,"{'SMA': np.float64(5.0), 'RSI': np.float64(8.1), 'MACD': np.float64(1.0), 'Risk/Reward': 1}"
-2025-03-13 09:30:00,USDJPY,SELL,148.19,148.42,147.96,1.0,27.260360458038683,3000,win,Pris under SMA20 med moderat RSI indikerer nedadgående momentum.,"{'SMA': np.float64(5.1), 'RSI': np.float64(3.8), 'MACD': np.float64(1.0), 'Risk/Reward': 1}"
-2025-03-13 17:15:00,EURUSD,SELL,1.087928,1.08976,1.086096,1.0,24.864880587410497,3000,open,Pris under SMA20 med moderat RSI indikerer nedadgående momentum.,"{'SMA': np.float64(5.2), 'RSI': np.float64(2.7), 'MACD': np.float64(1.0), 'Risk/Reward': 1}"
-2025-03-13 18:30:00,GBPUSD,SELL,1.2944,1.2971,1.2917,1.0,28.560637091192582,3000,open,Pris under SMA20 med moderat RSI indikerer nedadgående momentum.,"{'SMA': np.float64(5.3), 'RSI': np.float64(4.2), 'MACD': np.float64(1.0), 'Risk/Reward': 1}"
