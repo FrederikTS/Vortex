@@ -1,4 +1,0 @@
-US, Atlanta, GA: us-southeast-1.linodeobjects.com
-access key: 70LOVNO3O6CW45OKH3IA
-secret key: v3CSASVo07UIu96rVef8z7sfGEMyZWXg3tWvBHpA
-us-southeast-1.linodeobjects.com

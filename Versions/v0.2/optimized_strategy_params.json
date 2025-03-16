@@ -1,8 +1,0 @@
-{
-    "atr_multiplier_trending": 1.5,
-    "atr_multiplier_ranging": 1.0,
-    "rsi_sell_threshold": 60,
-    "rsi_buy_threshold": 30,
-    "min_strength_threshold": 20,
-    "min_reward_ratio": 1.5
-}
